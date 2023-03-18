@@ -1,22 +1,18 @@
 package com.battleship.Model;
+import java.lang.reflect.Array;
 import java.util.ArrayList;
 
 import com.battleship.DataAccess.BoardDataAccess;
 import com.battleship.DataAccess.GameDataAccess;
-import com.battleship.DataAccess.GameTypeDataAccess;
-import com.battleship.DataAccess.PlayerDataAccess;
 import com.battleship.DataAccess.ShipDataAccess;
 import com.battleship.DataAccess.SpaceDataAccess;
 import com.battleship.DataObject.BoardDataObject;
 import com.battleship.DataObject.GameDataObject;
-import com.battleship.DataObject.GameTypeDataObject;
-import com.battleship.DataObject.PlayerDataObject;
 import com.battleship.DataObject.ShipDataObject;
 import com.battleship.DataObject.SpaceDataObject;
 import com.battleship.DomainObject.BoardDomainObject;
 import com.battleship.DomainObject.GameDomainObject;
 import com.battleship.DomainObject.GameTypeDomainObject;
-import com.battleship.DomainObject.PlayerDomainObject;
 import com.battleship.DomainObject.ShipDomainObject;
 import com.battleship.DomainObject.SpaceDomainObject;
 import com.battleship.restService.Message;
@@ -75,45 +71,13 @@ public class GameModel {
 
 
 	public static GameDomainObject CreateGame(Message message, GameDomainObject domainGameToCreate) {
-		
-		//Conditional checking for missing parameters
-		if(domainGameToCreate.Player1Id == 0 || domainGameToCreate.Player2Id == 0
-		|| domainGameToCreate.GameTypeId == 0) {
-			message.addErrorMessage("Must include all parameters.");
-			return domainGameToCreate;
-		}
-
-		//Check for Validity of Players and Game Type
-		PlayerDataObject player1 = PlayerDataAccess.getPlayerById(domainGameToCreate.Player1Id);
-		GameTypeDataObject gameType = GameTypeDataAccess.getGameTypeById(domainGameToCreate.GameTypeId);
-		PlayerDataObject player2 = PlayerDataAccess.getPlayerById(domainGameToCreate.Player2Id);
-
-		if(gameType == null) {
-			message.addErrorMessage("The gametype is not valid.");
-			return domainGameToCreate;
-		}
-
-		if(player1 == null) {
-			message.addErrorMessage("Player 1 is not a valid player.");
-			return domainGameToCreate;
-		} else if(player2 == null) {
-			message.addErrorMessage("Player 2 is not a valid player.");
-			return domainGameToCreate;
-		}
-
-		//Create Game Object
-		GameDataObject newGame = new GameDataObject(0, 0, domainGameToCreate.GameTypeId, -1, 
-		"Board Setup", domainGameToCreate.Player1Id, domainGameToCreate.Player2Id, 0, 0);
-
-		newGame = GameDataAccess.createGame(newGame);
-		domainGameToCreate.Id = newGame.Id;
-		domainGameToCreate.GameStatus = newGame.GameStatus;
-
-		return domainGameToCreate;
-
-
-
+		//To Be Written 
+			GameDataObject dataGameToCreate = new GameDataObject(0,0, domainGameToCreate.GameTypeId, 0, "Board Setup", domainGameToCreate.Player1Id, domainGameToCreate.Player2Id, 0, 0);
+			GameDataObject dataCreatedGame = GameDataAccess.createGame(dataGameToCreate);
+			
+		return new GameDomainObject(dataCreatedGame);
 	}
+		
 
 	public static GameDomainObject SetShips(Message message, int gameId, int playerId, ArrayList<ShipDomainObject> ships) {
 		//To Be Written
@@ -121,8 +85,102 @@ public class GameModel {
 	}
 	
 	public static GameDomainObject TakeTurn(Message message, int gameId, int playerId, int column, int row) throws Exception {
-		//To Be Written
-		return null;
+		//To Be Written Tierra Anthony
+		
+		GameDomainObject gamesDomain = new GameDomainObject(GameDataAccess.getGameById(gameId));
+	
+		int hitSpaceId = (column + ((row - 1)*10)) - 1;
+		boolean hitShip = false;
+		
+
+		//create spaces, domains, and ship's Data list for each player
+		ArrayList<SpaceDataObject> spaceP1 = SpaceDataAccess.getSpacesForBoardId(gamesDomain.Board1Id);
+		ArrayList<ShipDataObject> shipP1 = ShipDataAccess.getShipsForBoardId(gamesDomain.Board1Id);	
+		
+		ArrayList<SpaceDataObject> spaceP2 = SpaceDataAccess.getSpacesForBoardId(gamesDomain.Board2Id);
+		ArrayList<ShipDataObject> shipP2 = ShipDataAccess.getShipsForBoardId(gamesDomain.Board2Id);
+
+		ArrayList<ShipDomainObject> shipDomain1 = ShipDomainObject.MapFromDataList(shipP1);
+		ArrayList<ShipDomainObject> shipDomain2 = ShipDomainObject.MapFromDataList(shipP2);
+
+		if (gamesDomain.Player1Id == playerId){
+			//Checks player 1's ship domain
+			for (int i = 0; i < shipDomain2.size(); i++){
+				ArrayList<Cell> cells = GetCellsForShip(shipDomain2.get(i));
+
+				for(int j = 0; j < cells.size(); j++){
+					if(column == cells.get(j).column && row == cells.get(j).row){
+						hitShip = true;
+						spaceP2.get(hitSpaceId).Status = "hit";
+						shipP2.get(i).Length--;
+						message.addInfoMessage("A ship has been hit!");
+						
+						//Check if ship is sunk already
+						if(shipP2.get(i).Length == 0){
+							message.addInfoMessage("You sunk a ship!");
+						}
+					}
+		}		
 	}
+}else if(gamesDomain.Player2Id == playerId){
+	//Checks player 2's ship domain
+	for (int i = 0; i < shipDomain1.size(); i++){
+			ArrayList<Cell> cells = GetCellsForShip(shipDomain1.get(i));
+			for(int j = 0; j < cells.size(); j++){
+				if(column == cells.get(j).column && row==cells.get(j).row){
+						hitShip = true;
+						spaceP1.get(hitSpaceId).Status = "hit";
+						shipDomain1.get(i).Length = shipDomain1.get(i).Length - (j + 1);
+						message.addInfoMessage("A ship has been hit!");		
+
+						if(shipDomain1.get(i).Length == 0){
+							message.addInfoMessage("You sunk a ship!");
+						}
+					}
+				}
+			}
+		}
+		// player misses
+	if(gamesDomain.Player1Id == playerId && hitShip == false){
+		spaceP2.get(hitSpaceId).Status = "miss"; 
+		message.addInfoMessage("Miss");
+
+	}else if(gamesDomain.Player2Id == playerId && hitShip == false){
+		spaceP1.get(hitSpaceId).Status = "miss"; 
+		message.addInfoMessage("Miss");
+
+}
+	return gamesDomain;
+}
+
+
+	public static class Cell {
+        public int column;
+        public int row;
+    }
+
+    public static ArrayList<Cell> GetCellsForShip (ShipDomainObject ship) {
+        ArrayList<Cell> cells = new ArrayList<Cell>();
+
+        Cell cell = null;
+
+        for (int i=0; i< ship.Length; i++) {    
+            if (ship.IsVertical) {
+                cell = new Cell();
+                cell.column = ship.StartCol;
+                cell.row = ship.StartRow + i;
+            }
+            else {
+                cell = new Cell();
+                cell.column = ship.StartCol + i;
+                cell.row = ship.StartRow ;
+            }
+            cells.add(cell);
+        }
+
+        return cells;
+    }
+	
+    
 
 }
